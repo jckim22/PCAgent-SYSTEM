@@ -1,7 +1,18 @@
 ﻿#include "UrlMonitor.h"
 #include "BrowserHelper.h"
+#include "CommonUtils.h" // Utf16ToUtf8 사용
 #include <regex>
 #include <stdio.h>
+#include <string>
+#include "madCHook.h" // SendIpcMessage 사용
+
+// IPC 정의 (IpcServer.cpp와 동일하게 정의)
+#define IPC_NAME_URL "BrowserUrlEvent"
+#define IMT_URL_EVENT 0x9001
+
+#pragma pack(push,1)
+typedef struct _IPC_URL_MSG_HEADER { DWORD nType; DWORD dwSize; } IPC_URL_MSG_HEADER, * PIPC_URL_MSG_HEADER;
+#pragma pack(pop)
 
 static std::wstring g_candidate;
 static int g_count = 0;
@@ -12,6 +23,7 @@ static const std::wregex kUrlRegex(
     std::regex_constants::icase
 );
 
+// 확정 로직 기준: 2회 연속, 100ms
 static bool ConfirmUrl(const std::wstring& raw, std::wstring& confirmed)
 {
     DWORD now = GetTickCount();
@@ -35,8 +47,8 @@ static bool ConfirmUrl(const std::wstring& raw, std::wstring& confirmed)
 
     g_count++;
 
-    // ⭐ 3회 연속 + 300ms 유지
-    if (g_count >= 3 && now - g_firstTick >= 300)
+    // 확정 조건: 2회 연속 + 100ms
+    if (g_count >= 2 && now - g_firstTick >= 100)
     {
         std::wstring norm = raw;
         if (norm.find(L"://") == std::wstring::npos)
@@ -57,6 +69,7 @@ static bool ConfirmUrl(const std::wstring& raw, std::wstring& confirmed)
 
     return false;
 }
+
 UrlMonitor::UrlMonitor(Database* db)
     : m_database(db)
     , m_running(false)
@@ -71,12 +84,6 @@ UrlMonitor::~UrlMonitor() {
 bool UrlMonitor::Start() {
     bool expected = false;
     if (!m_running.compare_exchange_strong(expected, true)) {
-        return false; // 이미 실행 중
-    }
-
-    if (!m_uia.Initialize()) {
-        printf("[UrlMonitor] UIA init failed\n");
-        m_running.store(false);
         return false;
     }
 
@@ -95,48 +102,46 @@ void UrlMonitor::Stop() {
 }
 
 void UrlMonitor::MonitorThread() {
-    // 스레드별 COM 초기화
+    // 스레드별 COM 초기화 (UIA 사용을 위해 필수)
     HRESULT hrCo = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
     bool comInitialized = (SUCCEEDED(hrCo) || hrCo == RPC_E_CHANGED_MODE);
-    
+
     if (!m_uia.Initialize()) {
         printf("[UrlMonitor] UIA init failed in worker thread\n");
         if (comInitialized) CoUninitialize();
         return;
     }
 
-    // UIA 타임아웃 설정(필요 시)
-    // m_uia.SetTimeout(2000); // UiaHelper에 메서드 추가로 구현
 
     while (m_running.load()) {
         HWND fg = GetForegroundWindow();
-        if (!fg) { Sleep(500); continue; }
+        if (!fg) { Sleep(200); continue; }
 
-        // 최상위 윈도우로 승격
         HWND top = GetAncestor(fg, GA_ROOT);
-        if (!top) { Sleep(500); continue; }
+        if (!top) { Sleep(200); continue; }
 
         HWND uiaRoot = BrowserHelper::FindUiaRootWindow(top);
         if (!uiaRoot) {
-            Sleep(500);
+            Sleep(200);
             continue;
         }
 
-
-        // 브라우저 윈도우인지 확인
         std::wstring browserName;
-        if (!BrowserHelper::IsTargetBrowser(uiaRoot, browserName)) {
-            Sleep(500);
+        // 브라우저 윈도우인지 확인 및 브라우저 유형 획득
+        BrowserType type = BrowserHelper::GetBrowserType(uiaRoot, browserName);
+        if (type == BrowserType::Unknown) {
+            Sleep(200);
             continue;
         }
 
         std::wstring raw, confirmed;
 
-        if (m_uia.GetAddressBarUrl(uiaRoot, raw)) {
+        // UIA 호출 시 브라우저 유형 전달 (유형별 로직 분기)
+        if (m_uia.GetAddressBarUrl(uiaRoot, type, raw)) {
 
             if (ConfirmUrl(raw, confirmed)) {
 
-                // ⭐ 동일 URL 중복 방지
+                // 동일 URL 중복 방지
                 if (uiaRoot != m_lastHwnd || confirmed != m_lastUrl) {
 
                     std::wstring title = BrowserHelper::GetWindowTitle(uiaRoot);
@@ -149,7 +154,7 @@ void UrlMonitor::MonitorThread() {
             }
         }
 
-        Sleep(500); // 주기 조정 가능
+        Sleep(200); // 모니터링 주기 단축
     }
 
     m_uia.Shutdown();
@@ -163,6 +168,31 @@ void UrlMonitor::OnUrlChanged(const std::wstring& browser, const std::wstring& u
         m_database->SaveBrowserUrl(browser, url, title);
     }
 
-    // 필요 시 USER 프로그램에 알림 전송 (IPC)
-    // SendIpcMessage("BrowserUrlChanged", ...);
+    // IPC 메시지 전송 로직
+    // 데이터 형식: [BrowserName]|[URL]|[WindowTitle]
+    std::wstring wpayload = browser + L"|" + url + L"|" + title;
+    std::string payload = Utf16ToUtf8(wpayload);
+
+    DWORD payloadSize = (DWORD)payload.size() + 1; // null-terminator 포함
+    DWORD totalSize = sizeof(IPC_URL_MSG_HEADER) + payloadSize;
+
+    PIPC_URL_MSG_HEADER hdr = (PIPC_URL_MSG_HEADER)malloc(totalSize);
+    if (!hdr) return;
+
+    memset(hdr, 0, totalSize);
+
+    hdr->nType = IMT_URL_EVENT;
+    hdr->dwSize = payloadSize;
+
+    // 페이로드 복사
+    memcpy((BYTE*)hdr + sizeof(IPC_URL_MSG_HEADER),
+        payload.c_str(), payloadSize);
+
+    // SendIpcMessage는 madCHook에 정의된 함수
+    BOOL ok = SendIpcMessage(IPC_NAME_URL, hdr, totalSize);
+    if (!ok) {
+        printf("[UrlMonitor] Failed to send URL IPC message to user program\n");
+    }
+
+    free(hdr);
 }

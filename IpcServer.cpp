@@ -11,10 +11,10 @@ typedef struct _IPC_MSG_HEADER { DWORD nType; DWORD dwSize; } IPC_MSG_HEADER, * 
 #pragma pack(pop)
 
 #define IMT_USER_OPTION_UPDATE 0x8001
-#define IMT_URL_EVENT          0x9001
+#define IMT_URL_EVENT 0x9001
 
 #define IPC_NAME_OPTIONS "UserOptionUpdate"
-#define IPC_NAME_URL     "BrowserUrlEvent"
+#define IPC_NAME_URL "BrowserUrlEvent"
 
 IpcServer::IpcServer(WorkerThread* worker) : m_worker(worker) {}
 
