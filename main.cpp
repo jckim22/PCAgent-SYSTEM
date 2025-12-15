@@ -3,24 +3,29 @@
 #include "madCHook.h"
 #include "IpcServer.h"
 #include "WorkerThread.h"
-// #include "Database.h" // main에서 직접 사용하지 않으므로 제거 가능
+#include "UrlMonitor.h"
 
-int main()
-{
+int main() {
     InitializeMadCHook();
 
-    // DB 초기화는 WorkerThread 내부에서 수행함
-    WorkerThread worker; // 메시지를 처리할 워커 스레드 (NBSP 제거)
+    //옵션 리드 시작
+    WorkerThread worker;
     worker.Start();
 
-    IpcServer server(&worker); // IPC 서버에 워커 전달
+    IpcServer server(&worker);
     server.Start();
 
-    printf("[SYSTEM] Running...\n");
+    printf("[SYSTEM] Running with Option Reading...\n");
 
-    while (true)
-        Sleep(1000);
+    // URL 모니터 시작
+    UrlMonitor urlMonitor(worker.GetDatabase()); // Database 포인터 전달
+    urlMonitor.Start();
 
+    printf("[SYSTEM] Running with URL monitoring...\n");
+
+    while (true) Sleep(1000);
+
+    urlMonitor.Stop();
     server.Stop();
     worker.Stop();
 

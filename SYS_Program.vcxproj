@@ -102,14 +102,14 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>C:\dev\3rdparty\madCHook\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir)3rdparty\madCHook\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalLibraryDirectories>C:\dev\3rdparty\madCHook\lib\x64;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>madCHook64.lib;legacy_stdio_definitions.lib;sqlite3.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(SolutionDir)3rdparty\madCHook\lib\x64;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>madCHook64.lib;legacy_stdio_definitions.lib;sqlite3.lib;detours.lib;Ole32.lib;Uiautomationcore.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <UACExecutionLevel>RequireAdministrator</UACExecutionLevel>
     </Link>
   </ItemDefinitionGroup>
@@ -128,14 +128,22 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="BrowserHelper.cpp" />
+    <ClCompile Include="CommonUtils.cpp" />
     <ClCompile Include="Database.cpp" />
     <ClCompile Include="IpcServer.cpp" />
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="UIaHelper.cpp" />
+    <ClCompile Include="UrllMonitor.cpp" />
     <ClCompile Include="WorkerThread.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="BrowserHelper.h" />
+    <ClInclude Include="CommonUtils.h" />
     <ClInclude Include="Database.h" />
     <ClInclude Include="IpcServer.h" />
+    <ClInclude Include="UiaHelper.h" />
+    <ClInclude Include="UrlMonitor.h" />
     <ClInclude Include="WorkerThread.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

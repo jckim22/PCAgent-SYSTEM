@@ -1,15 +1,17 @@
 #pragma once
 #include <string>
+
 class WorkerThread;
 
-class IpcServer
-{
+class IpcServer {
 public:
     IpcServer(WorkerThread* worker);
     bool Start();
     void Stop();
 
-private:
     static void __stdcall OnIpcMsg(LPVOID ctx, PVOID pMessage, DWORD dwSize);
-    WorkerThread* m_worker = nullptr;
+    static void __stdcall OnUrlMsg(LPVOID ctx, PVOID pMessage, DWORD dwSize); // URL 이벤트용
+
+private:
+    WorkerThread* m_worker;
 };

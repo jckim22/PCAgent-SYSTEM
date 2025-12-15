@@ -13,6 +13,24 @@
       <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
     </Filter>
+    <Filter Include="소스 파일\WebMonitor">
+      <UniqueIdentifier>{6b9c5d1c-181b-45e2-8783-bee6573060d1}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="헤더 파일\WebMonitor">
+      <UniqueIdentifier>{1a69df14-bfd3-4dd2-9d44-40855e898abc}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="소스 파일\Common">
+      <UniqueIdentifier>{b49421f0-ca1a-49d1-8ac8-9dd0d5f14e92}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="헤더 파일\Common">
+      <UniqueIdentifier>{360ad71c-9f86-44d9-bfd5-2f463309894d}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="소스 파일\DB">
+      <UniqueIdentifier>{922103f3-9e37-4554-9888-5aefc4c98fbc}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="헤더 파일\DB">
+      <UniqueIdentifier>{c94c0595-21ed-4bbd-bcd0-754efc846c3f}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp">
@@ -24,8 +42,20 @@
     <ClCompile Include="WorkerThread.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
+    <ClCompile Include="UrllMonitor.cpp">
+      <Filter>소스 파일\WebMonitor</Filter>
+    </ClCompile>
+    <ClCompile Include="UIaHelper.cpp">
+      <Filter>소스 파일\WebMonitor</Filter>
+    </ClCompile>
+    <ClCompile Include="BrowserHelper.cpp">
+      <Filter>소스 파일\WebMonitor</Filter>
+    </ClCompile>
+    <ClCompile Include="CommonUtils.cpp">
+      <Filter>소스 파일\Common</Filter>
+    </ClCompile>
     <ClCompile Include="Database.cpp">
-      <Filter>소스 파일</Filter>
+      <Filter>소스 파일\DB</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -35,8 +65,20 @@
     <ClInclude Include="WorkerThread.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
+    <ClInclude Include="BrowserHelper.h">
+      <Filter>헤더 파일\WebMonitor</Filter>
+    </ClInclude>
+    <ClInclude Include="UiaHelper.h">
+      <Filter>헤더 파일\WebMonitor</Filter>
+    </ClInclude>
+    <ClInclude Include="UrlMonitor.h">
+      <Filter>헤더 파일\WebMonitor</Filter>
+    </ClInclude>
+    <ClInclude Include="CommonUtils.h">
+      <Filter>헤더 파일\Common</Filter>
+    </ClInclude>
     <ClInclude Include="Database.h">
-      <Filter>헤더 파일</Filter>
+      <Filter>헤더 파일\DB</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>
