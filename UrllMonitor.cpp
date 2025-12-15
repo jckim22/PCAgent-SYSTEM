@@ -1,7 +1,62 @@
-#include "UrlMonitor.h"
+ï»¿#include "UrlMonitor.h"
 #include "BrowserHelper.h"
+#include <regex>
 #include <stdio.h>
 
+static std::wstring g_candidate;
+static int g_count = 0;
+static DWORD g_firstTick = 0;
+
+static const std::wregex kUrlRegex(
+    LR"(^(https?:\/\/)?([a-z0-9-]+\.)+[a-z]{2,}(:\d+)?(\/.*)?$)",
+    std::regex_constants::icase
+);
+
+static bool ConfirmUrl(const std::wstring& raw, std::wstring& confirmed)
+{
+    DWORD now = GetTickCount();
+
+    // ê¸°ë³¸ í˜•íƒœ í•„í„°
+    if (raw.length() < 6) return false;
+    if (raw.find(L' ') != std::wstring::npos) return false;
+
+    size_t dot = raw.rfind(L'.');
+    if (dot == std::wstring::npos) return false;
+    if (raw.length() - dot < 3) return false;
+
+    // ìƒˆë¡œìš´ í›„ë³´
+    if (g_candidate != raw)
+    {
+        g_candidate = raw;
+        g_count = 1;
+        g_firstTick = now;
+        return false;
+    }
+
+    g_count++;
+
+    // â­ 3íšŒ ì—°ì† + 300ms ìœ ì§€
+    if (g_count >= 3 && now - g_firstTick >= 300)
+    {
+        std::wstring norm = raw;
+        if (norm.find(L"://") == std::wstring::npos)
+            norm = L"https://" + norm;
+
+        if (std::regex_match(norm, kUrlRegex))
+        {
+            confirmed = norm;
+
+            // reset
+            g_candidate.clear();
+            g_count = 0;
+            g_firstTick = 0;
+
+            return true;
+        }
+    }
+
+    return false;
+}
 UrlMonitor::UrlMonitor(Database* db)
     : m_database(db)
     , m_running(false)
@@ -16,7 +71,7 @@ UrlMonitor::~UrlMonitor() {
 bool UrlMonitor::Start() {
     bool expected = false;
     if (!m_running.compare_exchange_strong(expected, true)) {
-        return false; // ÀÌ¹Ì ½ÇÇà Áß
+        return false; // ì´ë¯¸ ì‹¤í–‰ ì¤‘
     }
 
     if (!m_uia.Initialize()) {
@@ -40,7 +95,7 @@ void UrlMonitor::Stop() {
 }
 
 void UrlMonitor::MonitorThread() {
-    // ½º·¹µåº° COM ÃÊ±âÈ­
+    // ìŠ¤ë ˆë“œë³„ COM ì´ˆê¸°í™”
     HRESULT hrCo = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
     bool comInitialized = (SUCCEEDED(hrCo) || hrCo == RPC_E_CHANGED_MODE);
     
@@ -50,14 +105,14 @@ void UrlMonitor::MonitorThread() {
         return;
     }
 
-    // UIA Å¸ÀÓ¾Æ¿ô ¼³Á¤(ÇÊ¿ä ½Ã)
-    // m_uia.SetTimeout(2000); // UiaHelper¿¡ ¸Ş¼­µå Ãß°¡·Î ±¸Çö
+    // UIA íƒ€ì„ì•„ì›ƒ ì„¤ì •(í•„ìš” ì‹œ)
+    // m_uia.SetTimeout(2000); // UiaHelperì— ë©”ì„œë“œ ì¶”ê°€ë¡œ êµ¬í˜„
 
     while (m_running.load()) {
         HWND fg = GetForegroundWindow();
         if (!fg) { Sleep(500); continue; }
 
-        // ÃÖ»óÀ§ À©µµ¿ì·Î ½Â°İ
+        // ìµœìƒìœ„ ìœˆë„ìš°ë¡œ ìŠ¹ê²©
         HWND top = GetAncestor(fg, GA_ROOT);
         if (!top) { Sleep(500); continue; }
 
@@ -68,35 +123,33 @@ void UrlMonitor::MonitorThread() {
         }
 
 
-        // ºê¶ó¿ìÀú À©µµ¿ìÀÎÁö È®ÀÎ
+        // ë¸Œë¼ìš°ì € ìœˆë„ìš°ì¸ì§€ í™•ì¸
         std::wstring browserName;
         if (!BrowserHelper::IsTargetBrowser(uiaRoot, browserName)) {
             Sleep(500);
             continue;
         }
 
-        // URL ÀĞ±â
-        std::wstring url;
-        if (!m_uia.GetAddressBarUrl(uiaRoot, url)) {
-            Sleep(500);
-            continue;
+        std::wstring raw, confirmed;
+
+        if (m_uia.GetAddressBarUrl(uiaRoot, raw)) {
+
+            if (ConfirmUrl(raw, confirmed)) {
+
+                // â­ ë™ì¼ URL ì¤‘ë³µ ë°©ì§€
+                if (uiaRoot != m_lastHwnd || confirmed != m_lastUrl) {
+
+                    std::wstring title = BrowserHelper::GetWindowTitle(uiaRoot);
+                    OnUrlChanged(browserName, confirmed, title);
+
+                    m_lastHwnd = uiaRoot;
+                    m_lastUrl = confirmed;
+                    m_lastBrowser = browserName;
+                }
+            }
         }
 
-        // º¯°æ °¨Áö (µ¿ÀÏ À©µµ¿ì + µ¿ÀÏ URLÀÌ¸é ½ºÅµ)
-        if (uiaRoot == m_lastHwnd && url == m_lastUrl && browserName == m_lastBrowser) {
-            Sleep(500);
-            continue;
-        }
-
-        // »õ·Î¿î URL ¹ß°ß
-        std::wstring title = BrowserHelper::GetWindowTitle(uiaRoot);
-        OnUrlChanged(browserName, url, title);
-
-        m_lastHwnd = uiaRoot;
-        m_lastUrl = url;
-        m_lastBrowser = browserName;
-
-        Sleep(500); // ÁÖ±â Á¶Á¤ °¡´É
+        Sleep(500); // ì£¼ê¸° ì¡°ì • ê°€ëŠ¥
     }
 
     m_uia.Shutdown();
@@ -110,6 +163,6 @@ void UrlMonitor::OnUrlChanged(const std::wstring& browser, const std::wstring& u
         m_database->SaveBrowserUrl(browser, url, title);
     }
 
-    // ÇÊ¿ä ½Ã USER ÇÁ·Î±×·¥¿¡ ¾Ë¸² Àü¼Û (IPC)
+    // í•„ìš” ì‹œ USER í”„ë¡œê·¸ë¨ì— ì•Œë¦¼ ì „ì†¡ (IPC)
     // SendIpcMessage("BrowserUrlChanged", ...);
 }

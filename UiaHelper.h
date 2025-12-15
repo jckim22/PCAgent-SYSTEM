@@ -1,6 +1,8 @@
-#pragma once
+﻿#pragma once
 #include <UIAutomation.h>
 #include <string>
+#include <unordered_map>
+#include <windows.h>
 
 class UiaHelper {
 public:
@@ -15,6 +17,9 @@ public:
 private:
     IUIAutomation* m_uia;
     bool m_initialized;
+
+    // ⭐ HWND → AddressBar 캐시
+    std::unordered_map<HWND, IUIAutomationElement*> m_cachedAddr;
 
     IUIAutomationElement* FindAddressBarElement(IUIAutomationElement* root);
 
