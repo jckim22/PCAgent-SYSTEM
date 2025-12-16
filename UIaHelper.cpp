@@ -1,34 +1,36 @@
 ﻿#include "UiaHelper.h"
 #include <vector>
 #include <stdio.h>
-#include <locale>
-#include <codecvt>
 
-UiaHelper::UiaHelper() : m_uia(nullptr), m_initialized(false) {}
-UiaHelper::~UiaHelper() { Shutdown(); }
+UiaHelper::UiaHelper() : m_uia(nullptr), m_initialized(false) {
+
+}
+UiaHelper::~UiaHelper() {
+    Shutdown(); 
+}
 
 bool UiaHelper::Initialize() {
     if (m_initialized) return true;
 
-    // UIA는 COM 기반이므로, 스레드 안전을 위해 COINIT_MULTITHREADED로 초기화
+    // UIA는 COM 기반이므로, 스레드 안전을 위해 COINIT_MULTITHREADED로 초기화 (속도, 스레드 안정성 MTA)
     HRESULT hr = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
-    if (FAILED(hr) && hr != RPC_E_CHANGED_MODE) {
+    if (FAILED(hr)) { //초기화 실패 시
         printf("[UIA] CoInitialize failed: 0x%08X\n", hr);
         return false;
     }
 
     // UIA 객체 생성
     hr = CoCreateInstance(
-        CLSID_CUIAutomation,
-        nullptr,
-        CLSCTX_INPROC_SERVER,
-        IID_IUIAutomation,
-        (void**)&m_uia
+        CLSID_CUIAutomation, //클래스 이름
+        nullptr, //독립 객체로 생성
+        CLSCTX_INPROC_SERVER, //COM 객체가 내 프로세스 안에서 DLL로 로드
+        IID_IUIAutomation, //인터페이스 설정
+        (void**)&m_uia // 인터페이스 포인터를 돌려받을 변수
     );
 
     if (FAILED(hr) || !m_uia) {
         printf("[UIA] CoCreateInstance failed: 0x%08X\n", hr);
-        CoUninitialize();
+        CoUninitialize(); //COM 초기화 해제 및 실패 반환
         return false;
     }
 
@@ -39,17 +41,17 @@ bool UiaHelper::Initialize() {
 
 void UiaHelper::Shutdown() {
     // 캐시된 UIA 요소들을 모두 Release
-    for (auto& it : m_cachedAddr) {
-        if (it.second) it.second->Release();
+    for (auto& it : m_cachedAddr) { //캐시된 모든 UI요소 순회
+        if (it.second) it.second->Release(); //UIA 요소의 참조 카운트를 감소시켜 해제
     }
-    m_cachedAddr.clear();
+	m_cachedAddr.clear(); //캐시 맵 비우기
 
     if (m_uia) {
-        m_uia->Release();
+        m_uia->Release(); //IUIAutomation 객체 해제
         m_uia = nullptr;
     }
     if (m_initialized) {
-        CoUninitialize();
+		CoUninitialize(); //COM 라이브러리 해제
         m_initialized = false;
     }
 }
@@ -59,7 +61,7 @@ bool UiaHelper::GetAddressBarUrl(HWND hwnd, BrowserType type, std::wstring& urlO
     if (!m_uia || !hwnd || type == BrowserType::Unknown) return false;
 
     // 1️. 캐시 우선: 이전에 찾은 요소가 있다면 재탐색 없이 사용 시도
-    auto it = m_cachedAddr.find(hwnd);
+	auto it = m_cachedAddr.find(hwnd); //hwnd에 해당하는 캐시된 요소 찾기
     if (it != m_cachedAddr.end()) {
         if (ReadValueFromElement(it->second, urlOut) ||
             ReadTextFromElement(it->second, urlOut)) {
@@ -72,18 +74,18 @@ bool UiaHelper::GetAddressBarUrl(HWND hwnd, BrowserType type, std::wstring& urlO
 
     // 2️. UIA Root: HWND에서 UIA 루트 요소 얻기
     IUIAutomationElement* root = nullptr;
-    HRESULT hr = m_uia->ElementFromHandle(hwnd, &root);
+    HRESULT hr = m_uia->ElementFromHandle(hwnd, &root); //HWND를 기반으로 UIA 트리의 루트 얻기
     if (FAILED(hr) || !root) return false;
 
     // 3️. 브라우저 유형에 맞춰 주소 표시줄 요소 탐색
-    IUIAutomationElement* addr = FindAddressBarElementByBrowser(root, type);
-    root->Release();
+    IUIAutomationElement* addr = FindAddressBarElementByBrowser(root, type); //브라우저 유형별 주소 표시줄 요소 찾기
+    root->Release(); //루트 요소의 참조카운트를 감소
 
     if (!addr) return false;
 
     // 4️. 캐시: 성공적으로 찾은 요소를 캐시
-    addr->AddRef();
-    m_cachedAddr[hwnd] = addr;
+    addr->AddRef(); //찾은 요소의 참조 카운트 증가
+    m_cachedAddr[hwnd] = addr; //캐시에 저장
 
     // 5️. 값 읽기
     bool ok =
@@ -221,7 +223,7 @@ bool UiaHelper::ReadValueFromElement(IUIAutomationElement* element, std::wstring
     vp->Release();
 
     if (!bstr) return false;
-    out.assign(bstr, SysStringLen(bstr));
+	out.assign(bstr, SysStringLen(bstr)); //BSTR을 std::wstring로 변환
     SysFreeString(bstr);
     return true;
 }

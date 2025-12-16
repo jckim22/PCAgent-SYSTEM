@@ -11,24 +11,26 @@
 #define IMT_URL_EVENT 0x9001
 
 #pragma pack(push,1)
-typedef struct _IPC_URL_MSG_HEADER { DWORD nType; DWORD dwSize; } IPC_URL_MSG_HEADER, * PIPC_URL_MSG_HEADER;
+typedef struct _IPC_URL_MSG_HEADER {
+    DWORD nType; DWORD dwSize;
+} IPC_URL_MSG_HEADER, * PIPC_URL_MSG_HEADER;
 #pragma pack(pop)
 
-static std::wstring g_candidate;
-static int g_count = 0;
-static DWORD g_firstTick = 0;
+static std::wstring g_candidate; //URL 의심 후보
+static int g_count = 0; //연속 확인 횟수
+static DWORD g_firstTick = 0; //URL 후보 처음 나타난 시점 (URL이 너무 빨리 바뀌는 경우 방지용)
 
 static const std::wregex kUrlRegex(
     LR"(^(https?:\/\/)?([a-z0-9-]+\.)+[a-z]{2,}(:\d+)?(\/.*)?$)",
     std::regex_constants::icase
-);
+); //URL 형식 검사용 정규식 (불변)
 
 // 확정 로직 기준: 2회 연속, 100ms
 static bool ConfirmUrl(const std::wstring& raw, std::wstring& confirmed)
 {
     DWORD now = GetTickCount();
 
-    // 기본 형태 필터
+	// 기본 형태 검사(길이, 공백, 최소 도메인 등)
     if (raw.length() < 6) return false;
     if (raw.find(L' ') != std::wstring::npos) return false;
 
@@ -36,8 +38,8 @@ static bool ConfirmUrl(const std::wstring& raw, std::wstring& confirmed)
     if (dot == std::wstring::npos) return false;
     if (raw.length() - dot < 3) return false;
 
-    // 새로운 후보
-    if (g_candidate != raw)
+    // 새로운 후보가 들어오면 카운트 초기화
+    if (g_candidate != raw) 
     {
         g_candidate = raw;
         g_count = 1;
@@ -87,17 +89,17 @@ bool UrlMonitor::Start() {
         return false;
     }
 
-    m_thread = std::thread(&UrlMonitor::MonitorThread, this);
+	m_thread = std::thread(&UrlMonitor::MonitorThread, this); //URL 모니터링 스레드 시작
     printf("[UrlMonitor] Started\n");
     return true;
 }
 
 void UrlMonitor::Stop() {
-    m_running.store(false);
-    if (m_thread.joinable()) {
+	m_running.store(false); //스레드 루프 종료 신호
+    if (m_thread.joinable()) { //스레드가 실행중이면 종료될 때까지 대기
         m_thread.join();
     }
-    m_uia.Shutdown();
+    m_uia.Shutdown(); //URL 모니터링 UIA 자원 해제
     printf("[UrlMonitor] Stopped\n");
 }
 
@@ -113,14 +115,14 @@ void UrlMonitor::MonitorThread() {
     }
 
 
-    while (m_running.load()) {
-        HWND fg = GetForegroundWindow();
+	while (m_running.load()) { //m_running이 true인 동안 반복
+		HWND fg = GetForegroundWindow(); //현재 포그라운드 윈도우 핸들 가져오기
         if (!fg) { Sleep(200); continue; }
 
-        HWND top = GetAncestor(fg, GA_ROOT);
+		HWND top = GetAncestor(fg, GA_ROOT); //최상위 윈도우 핸들 가져오기
         if (!top) { Sleep(200); continue; }
 
-        HWND uiaRoot = BrowserHelper::FindUiaRootWindow(top);
+        HWND uiaRoot = BrowserHelper::FindUiaRootWindow(top); //UIA 지원 브라우저 윈도우 찾기
         if (!uiaRoot) {
             Sleep(200);
             continue;
@@ -137,15 +139,15 @@ void UrlMonitor::MonitorThread() {
         std::wstring raw, confirmed;
 
         // UIA 호출 시 브라우저 유형 전달 (유형별 로직 분기)
-        if (m_uia.GetAddressBarUrl(uiaRoot, type, raw)) {
+        if (m_uia.GetAddressBarUrl(uiaRoot, type, raw)) { //UIA를 통해 주소 표시줄의 URL 후보를 읽어옴
 
-            if (ConfirmUrl(raw, confirmed)) {
+            if (ConfirmUrl(raw, confirmed)) { //URL 확정 로직 수행
 
                 // 동일 URL 중복 방지
                 if (uiaRoot != m_lastHwnd || confirmed != m_lastUrl) {
 
-                    std::wstring title = BrowserHelper::GetWindowTitle(uiaRoot);
-                    OnUrlChanged(browserName, confirmed, title);
+					std::wstring title = BrowserHelper::GetWindowTitle(uiaRoot); //윈도우 타이틀 가져오기
+					OnUrlChanged(browserName, confirmed, title); //URL 변경 이벤트 처리
 
                     m_lastHwnd = uiaRoot;
                     m_lastUrl = confirmed;
@@ -154,13 +156,14 @@ void UrlMonitor::MonitorThread() {
             }
         }
 
-        Sleep(200); // 모니터링 주기 단축
+        Sleep(200); // 모니터링 주기
     }
 
     m_uia.Shutdown();
     if (comInitialized) CoUninitialize();
 }
 
+//URL 확정 시 데이터베이스 저장 및 IPC 메시지 전송
 void UrlMonitor::OnUrlChanged(const std::wstring& browser, const std::wstring& url, const std::wstring& title) {
     printf("[UrlMonitor] %ls: %ls\n", browser.c_str(), url.c_str());
 

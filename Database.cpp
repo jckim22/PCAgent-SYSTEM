@@ -3,9 +3,14 @@
 #include <stdio.h>
 #include <string>
 
-Database::Database() : m_db(nullptr) {}
-Database::~Database() { Close(); }
+Database::Database() : m_db(nullptr)
+{
+}
+Database::~Database() {
+    Close();
+}
 
+// 데이터베이스 초기화
 bool Database::Initialize(const char* dbPath) {
     if (m_db) return true;
 
@@ -30,6 +35,7 @@ bool Database::Initialize(const char* dbPath) {
     return true;
 }
 
+// 데이터베이스 닫기
 void Database::Close() {
     if (m_db) {
         sqlite3_close(m_db);
@@ -38,6 +44,7 @@ void Database::Close() {
     }
 }
 
+// 옵션 저장용 테이블 생성
 bool Database::CreateTableIfNotExists() {
     const char* sqlCreate =
         "CREATE TABLE IF NOT EXISTS Options ("
@@ -71,7 +78,7 @@ bool Database::CreateTableIfNotExists() {
     }
     if (stmt) sqlite3_finalize(stmt);
 
-    if (!hasSEQ) {
+    if (!hasSEQ) { //컬럼에 SEQ 없으면 SEQ 컬럼 추가
         const char* sqlAddSeq = "ALTER TABLE Options ADD COLUMN SEQ INTEGER NOT NULL DEFAULT 0;";
         rc = sqlite3_exec(m_db, sqlAddSeq, nullptr, nullptr, &err);
         if (rc != SQLITE_OK) {
@@ -90,6 +97,7 @@ bool Database::CreateTableIfNotExists() {
     return true;
 }
 
+// URL 로그 저장용 테이블 생성
 bool Database::CreateUrlLogsTableIfNotExists() {
     const char* sqlCreate =
         "CREATE TABLE IF NOT EXISTS UrlLogs ("
@@ -120,6 +128,7 @@ bool Database::CreateUrlLogsTableIfNotExists() {
     return true;
 }
 
+// 옵션 Row 저장
 bool Database::SaveOptions(int seq, int opt1, int opt2, int opt3) {
     if (!m_db) return false;
     const char* sql = "INSERT INTO Options (OPT1, OPT2, OPT3, SEQ) VALUES (?, ?, ?, ?);";
@@ -129,7 +138,7 @@ bool Database::SaveOptions(int seq, int opt1, int opt2, int opt3) {
         printf("[DB] Prepare failed: %s\n", sqlite3_errmsg(m_db));
         return false;
     }
-    sqlite3_bind_int(stmt, 1, opt1);
+	sqlite3_bind_int(stmt, 1, opt1); //첫번째 ?에 opt1 바인딩
     sqlite3_bind_int(stmt, 2, opt2);
     sqlite3_bind_int(stmt, 3, opt3);
     sqlite3_bind_int(stmt, 4, seq);
@@ -143,6 +152,7 @@ bool Database::SaveOptions(int seq, int opt1, int opt2, int opt3) {
     return true;
 }
 
+// 최신 옵션 Row 로드
 bool Database::LoadOptions(int& opt1, int& opt2, int& opt3) {
     if (!m_db) return false;
     const char* sql = "SELECT OPT1, OPT2, OPT3 FROM Options ORDER BY id DESC LIMIT 1;";
@@ -164,6 +174,7 @@ bool Database::LoadOptions(int& opt1, int& opt2, int& opt3) {
     return false;
 }
 
+// URL 로그 저장
 bool Database::SaveUrlLog(const char* procName, int pid, const char* method,
     const char* scheme, const char* host, int port,
     const char* path, const char* fullUrl) {
@@ -177,7 +188,7 @@ bool Database::SaveUrlLog(const char* procName, int pid, const char* method,
         printf("[DB] Prepare UrlLog failed: %s\n", sqlite3_errmsg(m_db));
         return false;
     }
-    sqlite3_bind_text(stmt, 1, procName ? procName : "", -1, SQLITE_TRANSIENT);
+	sqlite3_bind_text(stmt, 1, procName ? procName : "", -1, SQLITE_TRANSIENT); //첫번째 ?에 procName 바인딩
     sqlite3_bind_int(stmt, 2, pid);
     sqlite3_bind_text(stmt, 3, method ? method : "", -1, SQLITE_TRANSIENT);
     sqlite3_bind_text(stmt, 4, scheme ? scheme : "", -1, SQLITE_TRANSIENT);

@@ -20,7 +20,7 @@ private:
     IUIAutomation* m_uia;
     bool m_initialized;
 
-    // ⭐ HWND → AddressBar 캐시
+    // HWND → AddressBar 캐시
     std::unordered_map<HWND, IUIAutomationElement*> m_cachedAddr;
 
     // 브라우저 유형별 주소 표시줄 요소를 찾는 함수로 변경
